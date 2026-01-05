@@ -1,49 +1,37 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
-import { prisma } from "@/lib/prisma";
-import { canUseModel } from "@/lib/access";
-import { openRouterChatCompletion } from "@/lib/openrouter";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 
-export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+export const runtime = "nodejs";
 
-  const userId = (session.user as any).id as string;
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+type ModelInfo = { id: string; label: string; tier: "free" | "pro" };
 
-  const { chatId, model, message } = await req.json() as {
-    chatId?: string;
-    model: string;
-    message: string;
-  };
+const FREE_MODELS: ModelInfo[] = [
+  { id: "openai/gpt-4o-mini", label: "GPT-4o mini", tier: "free" },
+  { id: "google/gemini-1.5-flash", label: "Gemini 1.5 Flash", tier: "free" },
+];
 
-  if (!canUseModel(user.subscriptionStatus, model)) {
-    return NextResponse.json({ error: "Model locked. Upgrade to PRO." }, { status: 403 });
+const PRO_MODELS: ModelInfo[] = [
+  { id: "openai/gpt-4o", label: "GPT-4o", tier: "pro" },
+  { id: "anthropic/claude-3.5-sonnet", label: "Claude 3.5 Sonnet", tier: "pro" },
+];
+
+function isProEnabledForNow() {
+  // Fase 1: toggle manuale per far funzionare la UI.
+  // Fase 2: lo colleghiamo a Stripe + DB (customer subscription).
+  return process.env.PRO_UNLOCK_ENABLED === "true";
+}
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const chat = chatId
-    ? await prisma.chat.findFirst({ where: { id: chatId, userId } })
-    : await prisma.chat.create({ data: { userId, title: message.slice(0, 40) || "New chat" } });
+  const models = isProEnabledForNow() ? [...FREE_MODELS, ...PRO_MODELS] : FREE_MODELS;
 
-  if (!chat) return NextResponse.json({ error: "Chat not found" }, { status: 404 });
-
-  await prisma.message.create({ data: { chatId: chat.id, role: "user", content: message } });
-
-  const history = await prisma.message.findMany({
-    where: { chatId: chat.id },
-    orderBy: { createdAt: "asc" },
-    take: 30
+  return NextResponse.json({
+    proEnabled: isProEnabledForNow(),
+    models,
   });
-
-  const messages = history.map(m => ({ role: m.role as any, content: m.content }));
-
-  const out = await openRouterChatCompletion({ model, messages });
-  const assistantText = out?.choices?.[0]?.message?.content ?? "No response.";
-
-  await prisma.message.create({
-    data: { chatId: chat.id, role: "assistant", content: assistantText, model }
-  });
-
-  return NextResponse.json({ chatId: chat.id, assistant: assistantText });
 }
