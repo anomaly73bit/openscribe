@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tema: beige chiaro + blu */
+:root {
+  --bg: 250 246 236;
+  --card: 255 252 245;
+  --border: 210 200 180;
+  --muted: 110 104 92;
+  --text: 28 25 20;
+
+  --primary: 37 99 235;   /* blue-600 */
+  --primary2: 29 78 216;  /* blue-700 */
+  --ring: 59 130 246;     /* blue-500 */
+}
+
+html, body { height: 100%; }
+
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+}
+
+/* superfici tipo carta */
+.paper {
+  background: rgba(255, 252, 245, 0.92);
+  border: 1px solid rgba(210, 200, 180, 0.65);
+  box-shadow: 0 8px 28px rgba(40, 30, 10, 0.08);
+}
+.paper-soft {
+  background: rgba(255, 252, 245, 0.70);
+  border: 1px solid rgba(210, 200, 180, 0.45);
+}
